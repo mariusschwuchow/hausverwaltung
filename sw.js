@@ -1,4 +1,4 @@
-const CACHE = 'hausverwaltung-v2';
+const CACHE = 'hausverwaltung-v3';
 const ASSETS = ['./', 'index.html', 'style.css', 'util.js', 'db.js', 'finance.js', 'meters.js', 'app.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (e) => {

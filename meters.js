@@ -36,19 +36,25 @@ const Meters = (() => {
         row.issues.push({ level: 'error', text: `Stand ist niedriger als am ${fmtDate(prev.datum)} – Tippfehler oder nicht erfasster Zählertausch?` });
       }
       if (prev && row.days === 0 && r.stand !== prev.stand) row.issues.push({ level: 'warn', text: 'zwei unterschiedliche Stände am selben Tag' });
-      if (prev && prev.stand >= 10 && r.stand >= prev.stand * 9) row.issues.push({ level: 'warn', text: 'Stand etwa 10-mal so hoch wie zuvor – Komma verrutscht?' });
       return row;
     });
 
-    // Ausreißer: Tagesverbrauch im Vergleich zum Median aller Zeiträume (ab 7 Tagen).
-    const rates = rows.filter((r) => r.days >= 7 && r.perDay >= 0).map((r) => r.perDay);
+    // Ausreißer: Tagesverbrauch im Vergleich zum Median aller Zeiträume ab 60 Tagen
+    // (kürzere Zeiträume, z. B. bei Mieterwechseln, schwanken zu stark).
+    // Heizung/Warmwasser schwanken mit der Jahreszeit: dort nur deutlich zu hohe Werte melden.
+    const MIN_DAYS = 60;
+    const saisonal = /Wärme|Gas|Heiz|Warmwasser/.test(z.art || '');
+    const rates = rows.filter((r) => r.days >= MIN_DAYS && r.perDay >= 0).map((r) => r.perDay);
     const med = rates.length >= 3 ? median(rates) : null;
     if (med && med > 0) {
-      for (const r of rows) {
-        if (!(r.days >= 7) || r.perDay == null || r.perDay < 0 || r.issues.some((x) => x.level === 'error')) continue;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (!(r.days >= MIN_DAYS) || r.perDay == null || r.perDay < 0 || r.issues.some((x) => x.level === 'error')) continue;
         const f = r.perDay / med;
-        if (f > 3) r.issues.push({ level: 'warn', text: `Verbrauch ${fmtNum(f, 1)}-mal so hoch wie üblich` });
-        else if (f < 1 / 3) r.issues.push({ level: 'warn', text: `Verbrauch nur ${fmtNum(f * 100, 0)} % des Üblichen` });
+        const prev = rows[i - 1];
+        if (f > 5 && prev && prev.stand >= 10 && r.stand >= prev.stand * 9) r.issues.push({ level: 'warn', text: 'Stand etwa 10-mal so hoch wie zuvor – Komma verrutscht?' });
+        else if (f > (saisonal ? 4 : 3)) r.issues.push({ level: 'warn', text: `Verbrauch ${fmtNum(f, 1)}-mal so hoch wie üblich` });
+        else if (!saisonal && f < 1 / 3) r.issues.push({ level: 'warn', text: `Verbrauch nur ${fmtNum(f * 100, 0)} % des Üblichen` });
       }
     }
     if (!z.ausgebaut && list.length && daysBetween(list[list.length - 1].datum, today) > 400) {
