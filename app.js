@@ -94,6 +94,7 @@ const FORMS = {
       { name: 'kaution', label: 'Kaution (€)', type: 'number', step: '0.01' },
       { name: 'staffeln', label: 'Miete und Vorauszahlungen', type: 'staffeln' },
       { name: 'suchbegriffe', label: 'Suchbegriffe für den Zahlungsabgleich', hint: 'kommagetrennt, z. B. „Miete Whg 3, Müller“', full: true },
+      { name: 'kontoAb', label: 'Mietkonto führen ab', type: 'month', hint: 'leer = ab Mietbeginn; sinnvoll bei übernommenen Verträgen ohne alte Zahlungen' },
       { name: 'notiz', label: 'Notiz', type: 'textarea' },
     ],
     validate: (d) => {
@@ -113,6 +114,7 @@ const FORMS = {
         ...einheitenVon(o.id).map((e) => ({ value: `e:${e.id}`, label: `${o.name} · ${e.bezeichnung}` })),
       ]) },
       { name: 'art', label: 'Art', type: 'select', options: opts(Meters.ARTEN) },
+      { name: 'bezeichnung', label: 'Bezeichnung', placeholder: 'z. B. Allgemeinstrom, Wasser Waschmaschine' },
       { name: 'nummer', label: 'Zählernummer', required: true },
       { name: 'masseinheit', label: 'Einheit', type: 'select', options: opts(Meters.EINHEITEN) },
       { name: 'eingebaut', label: 'Eingebaut am', type: 'date' },
@@ -346,7 +348,7 @@ function viewDashboard() {
   const offenList = table([{ label: 'Vertrag' }, { label: 'Rückstand', cls: 'num' }],
     offen.slice(0, 6).map(({ v, s }) => [link('vertrag', v.id, vertragLabel(v)), signed(s)]), 'Keine Rückstände. 👍');
   const warnList = table([{ label: 'Zähler' }, { label: 'Ablesung' }, { label: 'Hinweis' }],
-    warn.slice(0, 8).map((w) => ({ cls: w.level, cells: [link('zaehler', w.z.id, `${w.z.art} ${w.z.nummer}`) + `<br><small class="muted">${esc(Meters.ort(w.z))}</small>`, `${fmtDate(w.ablesung.datum)}: ${fmtNum(w.ablesung.stand)}`, esc(w.text)] })),
+    warn.slice(0, 8).map((w) => ({ cls: w.level, cells: [link('zaehler', w.z.id, Meters.label(w.z)) + `<br><small class="muted">${esc(Meters.ort(w.z))}</small>`, `${fmtDate(w.ablesung.datum)}: ${fmtNum(w.ablesung.stand)}`, esc(w.text)] })),
     'Alle Zählerstände sind plausibel.');
 
   const todo = [];
@@ -378,7 +380,7 @@ function zaehlerTable(list, showOrt = false) {
     const r = Meters.readings(z.id);
     const last = r[r.length - 1];
     const n = Meters.analyse(z).issues.length;
-    return { cls: z.ausgebaut ? 'dim' : '', cells: [link('zaehler', z.id, `${z.art} ${z.nummer}`), ...(showOrt ? [esc(Meters.ort(z))] : []), last ? `${fmtNum(last.stand)} ${esc(z.masseinheit || '')}` : '–', last ? fmtDate(last.datum) : '–', z.ausgebaut ? `ausgebaut ${fmtDate(z.ausgebaut)}` : (n ? `<span class="badge warn">${n} Hinweis${n > 1 ? 'e' : ''}</span>` : '<span class="badge good">ok</span>'), z.ausgebaut ? '' : btn('+ Ablesung', 'new', { type: 'ablesung', zaehler: z.id }, 'small secondary')] };
+    return { cls: z.ausgebaut ? 'dim' : '', cells: [link('zaehler', z.id, Meters.label(z)) + (z.bezeichnung ? `<small class="muted">${esc(z.art)}</small>` : ''), ...(showOrt ? [esc(Meters.ort(z))] : []), last ? `${fmtNum(last.stand)} ${esc(z.masseinheit || '')}` : '–', last ? fmtDate(last.datum) : '–', z.ausgebaut ? `ausgebaut ${fmtDate(z.ausgebaut)}` : (n ? `<span class="badge warn">${n} Hinweis${n > 1 ? 'e' : ''}</span>` : '<span class="badge good">ok</span>'), z.ausgebaut ? '' : btn('+ Ablesung', 'new', { type: 'ablesung', zaehler: z.id }, 'small secondary')] };
   });
   return table([{ label: 'Zähler' }, ...(showOrt ? [{ label: 'Ort' }] : []), { label: 'Letzter Stand', cls: 'num' }, { label: 'Datum' }, { label: 'Status' }, { label: '' }], rows, 'Keine Zähler.');
 }
@@ -494,7 +496,7 @@ function viewZaehlerDetail(id) {
   }
   const vor = Store.get(z.vorgaengerId);
   const nach = Store.get(z.nachfolgerId);
-  return header(`${esc(z.art)} ${esc(z.nummer)}`, esc(Meters.ort(z)),
+  return header(esc(Meters.label(z)), `${esc(z.art)} · ${esc(Meters.ort(z))}`,
     (z.ausgebaut ? '' : btn('+ Ablesung', 'new', { type: 'ablesung', zaehler: id }, 'primary') + btn('Zählertausch', 'tausch', { id }))
     + btn('Bearbeiten', 'edit', { id }) + btn('Löschen', 'delete', { id }, 'danger'))
     + card('Eckdaten', facts([['Einheit', me], ['Eingebaut', fmtDate(z.eingebaut)], ['Ausgebaut', z.ausgebaut ? fmtDate(z.ausgebaut) : null], ['Eichfrist', z.eichung ? `${z.eichung}${z.eichung <= new Date().getFullYear() ? ' <span class="badge warn">abgelaufen / fällig</span>' : ''}` : null],
@@ -508,7 +510,7 @@ function openTausch(id) {
   const z = Store.get(id);
   const r = Meters.readings(id);
   const last = r[r.length - 1];
-  openDialog(`<h2>Zählertausch: ${esc(z.art)} ${esc(z.nummer)}</h2>
+  openDialog(`<h2>Zählertausch: ${esc(Meters.label(z))}</h2>
     <p class="muted">Der alte Zähler wird mit Endstand ausgebaut, der neue mit Anfangsstand angelegt. Der Verbrauch wird über beide Zähler zusammengerechnet.</p>
     <div class="form-grid">
       ${fieldHtml({ name: 'datum', label: 'Tauschdatum', type: 'date', required: true }, todayIso())}

@@ -2,7 +2,8 @@
 // ---- Zähler: Ablesungen, Plausibilitätsprüfung, Zählertausch, Verbrauch ----
 
 const Meters = (() => {
-  const ARTEN = ['Kaltwasser', 'Warmwasser', 'Wärme (Heizung)', 'Heizkostenverteiler', 'Strom', 'Gas', 'Sonstiges'];
+  const ARTEN = ['Kaltwasser', 'Warmwasser', 'Wasser (Unterzähler)', 'Wärme (Heizung)', 'Wärme (Warmwasser)', 'Heizkostenverteiler', 'Strom', 'Gas', 'Sonstiges'];
+  const label = (z) => `${z.bezeichnung || z.art} ${z.nummer || ''}`.trim();
   const EINHEITEN = ['m³', 'kWh', 'MWh', 'Einheiten'];
 
   const readings = (zaehlerId) => Store.all('ablesung')
@@ -117,5 +118,5 @@ const Meters = (() => {
     return `${o ? o.name : '?'}${e ? ` · ${e.bezeichnung}` : ' · Allgemein'}`;
   };
 
-  return { ARTEN, EINHEITEN, readings, analyse, chain, valueAt, verbrauch, ort };
+  return { ARTEN, EINHEITEN, label, readings, analyse, chain, valueAt, verbrauch, ort };
 })();

@@ -36,11 +36,13 @@ const Finance = (() => {
   // Mietkonto bis einschließlich "until" (Standard: aktueller Monat).
   function konto(v, until = currentMonth()) {
     const months = new Set();
-    if (v.beginn) {
+    // "kontoAb": Mietkonto erst ab diesem Monat führen (z. B. bei übernommenen Verträgen ohne alte Zahlungen).
+    const start = [v.beginn ? v.beginn.slice(0, 7) : '', v.kontoAb || ''].sort()[1];
+    if (start) {
       const end = v.ende && v.ende.slice(0, 7) < until ? v.ende.slice(0, 7) : until;
-      monthsRange(v.beginn.slice(0, 7), end).forEach((m) => months.add(m));
+      monthsRange(start, end).forEach((m) => months.add(m));
     }
-    const pays = zahlungen(v.id);
+    const pays = zahlungen(v.id).filter((z) => !v.kontoAb || !z.monat || z.monat >= v.kontoAb);
     pays.forEach((z) => z.monat && months.add(z.monat));
     let saldo = 0;
     return [...months].sort().map((m) => {
